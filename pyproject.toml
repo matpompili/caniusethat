@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+src_paths = ["caniusethat", "tests", "examples"]
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["docs"]
+
+[[tool.mypy.overrides]]
+module = [
+    "pyzmq.*",
+    "setuptools"
+]
+ignore_missing_imports = true
