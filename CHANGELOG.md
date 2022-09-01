@@ -8,4 +8,4 @@
 
 -   Fix test hanging up because of logging in multiple threads
 
-[Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.2.1...v0.2.2)
+[Full v0.2.2 Changelog](https://github.com/matpompili/caniusethat/compare/v0.2.1...v0.2.2)
