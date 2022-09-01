@@ -84,6 +84,7 @@ def test_shared_thing():
     assert my_thing.add.__doc__ == "(a: int, b: int) -> int\nAdd two numbers."
     with pytest.raises(RuntimeError, match="RemoteProcedureError.METHOD_EXCEPTION"):
         my_thing.add(1, 2, 3)
+    my_thing.close()
 
     _force_remote_server_stop(SERVER_ADDRESS)
 
@@ -105,6 +106,7 @@ def test_locked_shared_thing():
     my_thing.initialize()
     assert my_thing.add(1, 2) == 3
     my_thing.finalize()
+    my_thing.close()
 
     _force_remote_server_stop(SERVER_ADDRESS)
 
