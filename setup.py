@@ -17,7 +17,7 @@ project_urls = {
 
 setup(
     name="caniusethat",
-    version="0.2.2",
+    version="0.2.3-beta.0",
     packages=["caniusethat"],
     author="Matteo Pompili",
     python_requires=">=3.8",
