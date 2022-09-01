@@ -70,17 +70,19 @@ class Thing:
 
     def available_methods(self) -> List[SharedMethodDescriptor]:
         return self._methods
-    
+
     def close(self) -> None:
         if not self._closed:
             _logger.info(f"Closing connection to server")
             rpc_pickle = pickle.dumps(
-            RemoteProcedureCall("_server", "release_lock_if_any", (self.name,))
+                RemoteProcedureCall("_server", "release_lock_if_any", (self.name,))
             )
             self.request_socket.send(rpc_pickle)
             result = pickle.loads(self.request_socket.recv())
             if not isinstance(result, RemoteProcedureResponse):
-                raise RuntimeError(f"Received invalid RemoteProcedureResponse: {result}")
+                raise RuntimeError(
+                    f"Received invalid RemoteProcedureResponse: {result}"
+                )
             if result.error != RemoteProcedureError.NO_ERROR:
                 raise RuntimeError(f"Remote procedure error: {result}")
             self._closed = True
