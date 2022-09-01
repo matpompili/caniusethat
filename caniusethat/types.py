@@ -12,6 +12,8 @@ class SharedObjectDescriptor(NamedTuple):
     name: str
     object: Any
     shared_methods: List[SharedMethodDescriptor]
+    locking_methods: List[str]
+    unlocking_methods: List[str]
 
 
 class RemoteProcedureCall(NamedTuple):
@@ -27,6 +29,7 @@ class RemoteProcedureError(Enum):
     NO_SUCH_METHOD = auto()
     METHOD_EXCEPTION = auto()
     INVALID_RPC = auto()
+    THING_IS_LOCKED = auto()
 
 
 class RemoteProcedureResponse(NamedTuple):
