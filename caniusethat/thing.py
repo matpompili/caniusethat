@@ -21,7 +21,7 @@ class Thing:
         context = zmq.Context.instance()
         self.request_socket = context.socket(zmq.REQ)
         self.request_socket.connect(server_address)
-        _logger.info(f"Connecting to server at {server_address}")
+        _logger.info(f"Connecting to 👀 CanIUseThat server at {server_address}")
         self._methods = self._get_object_description_from_server()
         self._populate_methods_from_description()
 
@@ -43,7 +43,7 @@ class Thing:
 
     def _populate_methods_from_description(self) -> None:
         for (name, signature, docstring) in self._methods:
-            _logger.info(f"Adding method {name}({signature})")
+            _logger.debug(f"Adding method {name}({signature})")
             method_fn = self._make_method_fn(name)
             method_fn.__name__ = name
             method_fn.__signature__ = signature  # type: ignore
@@ -73,7 +73,7 @@ class Thing:
 
     def close(self) -> None:
         if not self._closed:
-            _logger.info(f"Closing connection to server")
+            _logger.info(f"Closing connection to 👀 CanIUseThat server")
             rpc_pickle = pickle.dumps(
                 RemoteProcedureCall("_server", "release_lock_if_any", (self.name,))
             )

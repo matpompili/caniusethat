@@ -1,4 +1,5 @@
 import inspect
+import logging
 import pickle
 from functools import wraps
 from threading import Lock
@@ -88,12 +89,14 @@ class Server(StoppableThread):
 
         self.log_lock = Lock()
 
-    def _safe_log(self, message: str) -> None:
+    def _safe_log(self, message: str, level: int = logging.INFO) -> None:
         with self.log_lock:
-            _logger.info(message)
+            _logger.log(level, message)
 
     def _task_setup(self):
-        self._safe_log("Server setup")
+        self._safe_log(
+            f"Starting 👀 CanIUseThat server, listening on {self.router_address}."
+        )
         self.context = zmq.Context.instance()
         self.router_socket = self.context.socket(zmq.ROUTER)
         self.router_socket.bind(self.router_address)
@@ -102,7 +105,7 @@ class Server(StoppableThread):
         self.poller.register(self.router_socket, zmq.POLLIN)
 
     def _task_cleanup(self):
-        self._safe_log("Server cleanup")
+        self._safe_log("Closing 👀 CanIUseThat server connections.")
         self.poller.unregister(self.router_socket)
         self.router_socket.close(linger=1000)
 
@@ -129,7 +132,9 @@ class Server(StoppableThread):
             # Check if there are any new replies
             for dealer_socket in self.dealers.values():
                 if poll_sockets.get(dealer_socket) == zmq.POLLIN:
-                    self._safe_log(f"Received reply from worker {dealer_socket}")
+                    self._safe_log(
+                        f"Received reply from worker {dealer_socket}", logging.DEBUG
+                    )
                     message = dealer_socket.recv_multipart()
                     # Send the reply back to the client
                     self.router_socket.send_multipart(message)
@@ -148,19 +153,19 @@ class Server(StoppableThread):
 
         # Check if the RPC is properly formatted.
         if not isinstance(rpc, RemoteProcedureCall):
-            with self.log_lock:
-                _logger.warning(f"Received invalid RemoteProcedureCall: {rpc}")
+            self._safe_log(
+                f"Received invalid RemoteProcedureCall: {rpc}", logging.WARNING
+            )
             message = self._package_error(RemoteProcedureError.INVALID_RPC)
             self.router_socket.send_multipart([address, b"", message])
             return
 
-        self._safe_log(f"Received RPC: {rpc}")
+        self._safe_log(f"Received RPC: {rpc}", logging.DEBUG)
 
         # Check if the RPC is asking for the list of shared methods.
         if rpc.name == "_server" and rpc.method == "get_object_methods":
             if rpc.args[0] not in self.shared_objects:
-                with self.log_lock:
-                    _logger.warning(f"No such object: {rpc.args[0]}")
+                self._safe_log(f"No such object: {rpc.args[0]}", logging.WARNING)
                 message = self._package_error(RemoteProcedureError.NO_SUCH_THING)
                 self.router_socket.send_multipart([address, b"", message])
             else:
@@ -181,7 +186,7 @@ class Server(StoppableThread):
         if rpc.name == "_server" and rpc.method == "release_lock_if_any":
             if self.worker_locks.get(rpc.args[0]) == address:
                 self.worker_locks.pop(rpc.args[0])
-                self._safe_log(f"Released lock for {rpc.args[0]}")
+                self._safe_log(f"Released lock for {rpc.args[0]}", logging.DEBUG)
 
             message = self._package_success_reply(None)
             self.router_socket.send_multipart([address, b"", message])
@@ -189,8 +194,9 @@ class Server(StoppableThread):
 
         # Check if the RPC object is in the server.
         if rpc.name not in self.shared_objects:
-            with self.log_lock:
-                _logger.warning(f"Received RPC for unknown object: {rpc.name}")
+            self._safe_log(
+                f"Received RPC for unknown object: {rpc.name}", logging.WARNING
+            )
             message = self._package_error(RemoteProcedureError.NO_SUCH_THING)
             self.router_socket.send_multipart([address, b"", message])
             return
@@ -199,20 +205,20 @@ class Server(StoppableThread):
         if rpc.method not in [
             method.name for method in self.shared_objects[rpc.name].shared_methods
         ]:
-            with self.log_lock:
-                _logger.warning(
-                    f"Received RPC for unknown method: {rpc.name}.{rpc.method}"
-                )
+            self._safe_log(
+                f"Received RPC for unknown method: {rpc.name}.{rpc.method}",
+                logging.WARNING,
+            )
             message = self._package_error(RemoteProcedureError.NO_SUCH_METHOD)
             self.router_socket.send_multipart([address, b"", message])
             return
 
         # Check if the worker has a lock.
         if (rpc.name in self.worker_locks) and (self.worker_locks[rpc.name] != address):
-            with self.log_lock:
-                _logger.warning(
-                    f"Worker {rpc.name} is already locked by {str(self.worker_locks[rpc.name])}"
-                )
+            self._safe_log(
+                f"Worker {rpc.name} is already locked by {str(self.worker_locks[rpc.name])}",
+                logging.WARNING,
+            )
             message = self._package_error(RemoteProcedureError.THING_IS_LOCKED)
             self.router_socket.send_multipart([address, b"", message])
             return
@@ -221,18 +227,20 @@ class Server(StoppableThread):
         if (rpc.name not in self.worker_locks) and (
             rpc.method in self.shared_objects[rpc.name].locking_methods
         ):
-            self._safe_log(f"Locking worker {rpc.name} to {str(address)}")
+            self._safe_log(
+                f"Locking worker {rpc.name} to {str(address)}", logging.DEBUG
+            )
             self.worker_locks[rpc.name] = address
 
         # Everything looks good so far, dispatch the RPC to the correct worker.
-        self._safe_log(f"Dispatching RPC to worker {rpc.name}")
+        self._safe_log(f"Dispatching RPC to worker {rpc.name}", logging.DEBUG)
         self.dealers[rpc.name].send_multipart([address, b"", message])
 
         # Check if the worker needs to be unlocked.
         if (rpc.name in self.worker_locks) and (
             rpc.method in self.shared_objects[rpc.name].unlocking_methods
         ):
-            self._safe_log(f"Unlocking worker {rpc.name}")
+            self._safe_log(f"Unlocking worker {rpc.name}", logging.DEBUG)
             self.worker_locks.pop(rpc.name)
 
     def add_object(self, name: str, object: Any):
@@ -272,7 +280,7 @@ class Server(StoppableThread):
             name, object, shared_methods, locking_methods, unlocking_methods
         )
 
-        self._safe_log(f"Adding object {name}")
+        self._safe_log(f"Adding object {name} to server")
         with self.new_object_lock:
             self.shared_objects_queue[name] = descriptor
 

@@ -41,4 +41,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         my_server.stop()
         my_server.join()
-        print("Server stopped.")
