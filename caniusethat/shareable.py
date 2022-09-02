@@ -243,10 +243,10 @@ class Server(StoppableThread):
             self._safe_log(f"Unlocking worker {rpc.name}", logging.DEBUG)
             self.worker_locks.pop(rpc.name)
 
-    def add_object(self, name: str, object: Any):
+    def add_object(self, name: str, obj: Any):
         # Build the SharedObjectDescriptor
         shared_methods = []
-        for method_name, method in inspect.getmembers(object, _is_shared_method):
+        for method_name, method in inspect.getmembers(obj, _is_shared_method):
             signature = str(inspect.signature(method))
             docstring = inspect.getdoc(method)
             if docstring is None:
@@ -256,28 +256,28 @@ class Server(StoppableThread):
             )
 
         if len(shared_methods) == 0:
-            raise RuntimeError(f"No shared methods found in {object:!r}")
+            raise RuntimeError(f"No shared methods found in {obj:!r}")
 
         locking_methods = []
-        for method_name, method in inspect.getmembers(object, _is_locking_method):
+        for method_name, method in inspect.getmembers(obj, _is_locking_method):
             locking_methods.append(method_name)
 
         unlocking_methods = []
-        for method_name, method in inspect.getmembers(object, _is_unlocking_method):
+        for method_name, method in inspect.getmembers(obj, _is_unlocking_method):
             unlocking_methods.append(method_name)
 
         if (locking_methods) and (not unlocking_methods):
             raise RuntimeError(
-                f"Locking methods found in {object:!r} but no unlocking methods."
+                f"Locking methods found in {obj:!r} but no unlocking methods."
             )
 
         if (unlocking_methods) and (not locking_methods):
             raise RuntimeError(
-                f"Unlocking methods found in {object:!r} but no locking methods."
+                f"Unlocking methods found in {obj:!r} but no locking methods."
             )
 
         descriptor = SharedObjectDescriptor(
-            name, object, shared_methods, locking_methods, unlocking_methods
+            name, obj, shared_methods, locking_methods, unlocking_methods
         )
 
         self._safe_log(f"Adding object {name} to server")
