@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
 -   Fix error when docstring is not present in the function. (Issue #1, PR #4)
+-   Add `pyzmq.utils.win32.allow_interrupt` to the server threads, so they can be stopped on Windows. (Issue #2, PR #6)
 
 [Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.2.3...main)
 
