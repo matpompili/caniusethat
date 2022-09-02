@@ -21,6 +21,10 @@ class ClassWithoutLocks:
         """Add two numbers."""
         return a + b
 
+    @you_can_use_this
+    def method_without_docs(self, a, b):
+        return a - b
+
 
 class ClassWithLocks:
     @you_can_use_this
