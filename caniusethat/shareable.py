@@ -5,6 +5,7 @@ from threading import Lock
 from typing import Any, Callable, Dict, List
 
 import zmq
+from zmq.utils.win32 import allow_interrupt
 
 from caniusethat._thread import StoppableThread
 from caniusethat.logging import getLogger
@@ -114,23 +115,24 @@ class Server(StoppableThread):
 
     def _task_cycle(self):
         # Add any new objects to the shared objects.
-        with self.new_object_lock:
-            self._process_new_object_queue()
+        with allow_interrupt(self.stop):
+            with self.new_object_lock:
+                self._process_new_object_queue()
 
-        poll_sockets = dict(self.poller.poll(timeout=10))
+            poll_sockets = dict(self.poller.poll(timeout=10))
 
-        # Check if there are new requests.
-        if poll_sockets.get(self.router_socket) == zmq.POLLIN:
-            address, _, message = self.router_socket.recv_multipart()
-            self._process_incoming_rpc(address, message)
+            # Check if there are new requests.
+            if poll_sockets.get(self.router_socket) == zmq.POLLIN:
+                address, _, message = self.router_socket.recv_multipart()
+                self._process_incoming_rpc(address, message)
 
-        # Check if there are any new replies
-        for dealer_socket in self.dealers.values():
-            if poll_sockets.get(dealer_socket) == zmq.POLLIN:
-                self._safe_log(f"Received reply from worker {dealer_socket}")
-                message = dealer_socket.recv_multipart()
-                # Send the reply back to the client
-                self.router_socket.send_multipart(message)
+            # Check if there are any new replies
+            for dealer_socket in self.dealers.values():
+                if poll_sockets.get(dealer_socket) == zmq.POLLIN:
+                    self._safe_log(f"Received reply from worker {dealer_socket}")
+                    message = dealer_socket.recv_multipart()
+                    # Send the reply back to the client
+                    self.router_socket.send_multipart(message)
 
     def _package_reply(self, reply: Any, error: RemoteProcedureError) -> bytes:
         return pickle.dumps(RemoteProcedureResponse(reply, error))
@@ -324,24 +326,26 @@ class _ObjectWorker(StoppableThread):
         self.reply_socket.close(linger=1000)
 
     def _task_cycle(self):
-        # Wait for a request
-        poll_sockets = dict(self.poller.poll(timeout=10))
 
-        # Check if there are new requests
-        if poll_sockets.get(self.reply_socket) == zmq.POLLIN:
-            message = self.reply_socket.recv()
-            rpc: RemoteProcedureCall = pickle.loads(message)
+        with allow_interrupt(self.stop):
+            # Wait for a request
+            poll_sockets = dict(self.poller.poll(timeout=10))
 
-            try:
-                call_result = self.shared_object.object.__getattribute__(rpc.method)(
-                    *rpc.args, **rpc.kwargs
-                )
-            except Exception as e:
-                call_result = e
-                call_error = RemoteProcedureError.METHOD_EXCEPTION
-            else:
-                call_error = RemoteProcedureError.NO_ERROR
+            # Check if there are new requests
+            if poll_sockets.get(self.reply_socket) == zmq.POLLIN:
+                message = self.reply_socket.recv()
+                rpc: RemoteProcedureCall = pickle.loads(message)
 
-            response = RemoteProcedureResponse(call_result, call_error)
-            # Send the result back to the client
-            self.reply_socket.send(pickle.dumps(response))
+                try:
+                    call_result = self.shared_object.object.__getattribute__(
+                        rpc.method
+                    )(*rpc.args, **rpc.kwargs)
+                except Exception as e:
+                    call_result = e
+                    call_error = RemoteProcedureError.METHOD_EXCEPTION
+                else:
+                    call_error = RemoteProcedureError.NO_ERROR
+
+                response = RemoteProcedureResponse(call_result, call_error)
+                # Send the result back to the client
+                self.reply_socket.send(pickle.dumps(response))
