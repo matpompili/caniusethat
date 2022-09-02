@@ -45,6 +45,13 @@ class ClassWithLocks:
         pass
 
 
+class ClassWithReservedName:
+    @you_can_use_this
+    def close_this_thing(self) -> None:
+        """This method has a reserved name."""
+        pass
+
+
 @pytest.fixture(autouse=True)
 def wait_for_context_cleanup():
     yield
@@ -88,7 +95,7 @@ def test_shared_thing():
     assert my_thing.add.__doc__ == "(a: int, b: int) -> int\nAdd two numbers."
     with pytest.raises(RuntimeError, match="RemoteProcedureError.METHOD_EXCEPTION"):
         my_thing.add(1, 2, 3)
-    my_thing.close()
+    my_thing.close_this_thing()
 
     _force_remote_server_stop(SERVER_ADDRESS)
 
@@ -110,7 +117,26 @@ def test_locked_shared_thing():
     my_thing.initialize()
     assert my_thing.add(1, 2) == 3
     my_thing.finalize()
-    my_thing.close()
+    my_thing.close_this_thing()
+
+    _force_remote_server_stop(SERVER_ADDRESS)
+
+    my_server.join()
+
+
+def test_reserved_name():
+    my_obj = ClassWithReservedName()
+
+    my_server = Server(SERVER_ADDRESS)
+    my_server.start()
+    my_server.add_object("my_obj", my_obj)
+    time.sleep(0.5)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Method name `close_this_thing` is reserved for internal use, please change it in the remote class.",
+    ):
+        my_thing = Thing("my_obj", SERVER_ADDRESS)
 
     _force_remote_server_stop(SERVER_ADDRESS)
 

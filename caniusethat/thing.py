@@ -16,6 +16,8 @@ _logger = getLogger(__name__)
 
 
 class Thing:
+    RESERVED_NAMES = ["available_methods", "close_this_thing"]
+
     def __init__(self, name: str, server_address: str) -> None:
         self.name = name
         context = zmq.Context.instance()
@@ -43,6 +45,10 @@ class Thing:
 
     def _populate_methods_from_description(self) -> None:
         for (name, signature, docstring) in self._methods:
+            if name in self.RESERVED_NAMES:
+                raise RuntimeError(
+                    f"Method name `{name}` is reserved for internal use, please change it in the remote class."
+                )
             _logger.debug(f"Adding method {name}({signature})")
             method_fn = self._make_method_fn(name)
             method_fn.__name__ = name
@@ -71,7 +77,7 @@ class Thing:
     def available_methods(self) -> List[SharedMethodDescriptor]:
         return self._methods
 
-    def close(self) -> None:
+    def close_this_thing(self) -> None:
         if not self._closed:
             _logger.info(f"Closing connection to 👀 CanIUseThat server")
             rpc_pickle = pickle.dumps(
@@ -86,6 +92,3 @@ class Thing:
             if result.error != RemoteProcedureError.NO_ERROR:
                 raise RuntimeError(f"Remote procedure error: {result}")
             self._closed = True
-
-    def __del__(self) -> None:
-        self.close()
