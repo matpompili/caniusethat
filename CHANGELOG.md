@@ -2,6 +2,8 @@
 
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
+-   Fix error when docstring is not present in the function. (Issue #1, PR #4)
+
 [Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.2.3...main)
 
 ## [v0.2.3](https://github.com/matpompili/caniusethat/tree/v0.2.3) (2022-09-01)
