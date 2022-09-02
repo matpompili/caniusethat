@@ -238,7 +238,9 @@ class Server(StoppableThread):
         shared_methods = []
         for method_name, method in inspect.getmembers(object, _is_shared_method):
             signature = str(inspect.signature(method))
-            docstring = method.__doc__
+            docstring = inspect.getdoc(method)
+            if docstring is None:
+                docstring = ""
             shared_methods.append(
                 SharedMethodDescriptor(method_name, signature, docstring)
             )
