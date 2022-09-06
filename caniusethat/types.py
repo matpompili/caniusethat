@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 
 class SharedMethodDescriptor(NamedTuple):

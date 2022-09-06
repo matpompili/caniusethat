@@ -348,9 +348,9 @@ class _ObjectWorker(StoppableThread):
                 rpc: RemoteProcedureCall = pickle.loads(message)
 
                 try:
-                    call_result = self.shared_object.object.__getattribute__(
-                        rpc.method
-                    )(*rpc.args, **rpc.kwargs)
+                    call_result = self.shared_object.obj.__getattribute__(rpc.method)(
+                        *rpc.args, **rpc.kwargs
+                    )
                 except Exception as e:
                     call_result = e
                     call_error = RemoteProcedureError.METHOD_EXCEPTION

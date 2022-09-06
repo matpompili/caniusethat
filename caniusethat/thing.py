@@ -79,7 +79,7 @@ class Thing:
 
     def close_this_thing(self) -> None:
         if not self._closed:
-            _logger.info(f"Closing connection to 👀 CanIUseThat server")
+            _logger.info("Closing connection to 👀 CanIUseThat server")
             rpc_pickle = pickle.dumps(
                 RemoteProcedureCall("_server", "release_lock_if_any", (self.name,))
             )
