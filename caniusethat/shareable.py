@@ -21,16 +21,16 @@ from caniusethat.types import (
 _logger = getLogger(__name__)
 
 
-def _is_shared_method(object: Any) -> bool:
-    return inspect.ismethod(object) and hasattr(object, "_you_can_use_this")
+def _is_shared_method(obj: Any) -> bool:
+    return inspect.ismethod(obj) and hasattr(obj, "_you_can_use_this")
 
 
-def _is_locking_method(object: Any) -> bool:
-    return inspect.ismethod(object) and hasattr(object, "_acquire_lock")
+def _is_locking_method(obj: Any) -> bool:
+    return inspect.ismethod(obj) and hasattr(obj, "_acquire_lock")
 
 
-def _is_unlocking_method(object: Any) -> bool:
-    return inspect.ismethod(object) and hasattr(object, "_release_lock")
+def _is_unlocking_method(obj: Any) -> bool:
+    return inspect.ismethod(obj) and hasattr(obj, "_release_lock")
 
 
 def dealer_address(name: str) -> str:
@@ -74,6 +74,18 @@ def _force_remote_server_stop(server_address: str) -> Any:
     result = pickle.loads(request_socket.recv())
     request_socket.close(linger=10)
     return result
+
+
+def _package_reply(reply: Any, error: RemoteProcedureError) -> bytes:
+    return pickle.dumps(RemoteProcedureResponse(reply, error))
+
+
+def _package_error(error: RemoteProcedureError) -> bytes:
+    return _package_reply(None, error)
+
+
+def _package_success_reply(reply: Any) -> bytes:
+    return _package_reply(reply, RemoteProcedureError.NO_ERROR)
 
 
 class Server(StoppableThread):
@@ -139,15 +151,6 @@ class Server(StoppableThread):
                     # Send the reply back to the client
                     self.router_socket.send_multipart(message)
 
-    def _package_reply(self, reply: Any, error: RemoteProcedureError) -> bytes:
-        return pickle.dumps(RemoteProcedureResponse(reply, error))
-
-    def _package_error(self, error: RemoteProcedureError) -> bytes:
-        return self._package_reply(None, error)
-
-    def _package_success_reply(self, reply: Any) -> bytes:
-        return self._package_reply(reply, RemoteProcedureError.NO_ERROR)
-
     def _process_incoming_rpc(self, address: bytes, message: bytes) -> None:
         rpc = pickle.loads(message)
 
@@ -156,7 +159,7 @@ class Server(StoppableThread):
             self._safe_log(
                 f"Received invalid RemoteProcedureCall: {rpc}", logging.WARNING
             )
-            message = self._package_error(RemoteProcedureError.INVALID_RPC)
+            message = _package_error(RemoteProcedureError.INVALID_RPC)
             self.router_socket.send_multipart([address, b"", message])
             return
 
@@ -166,10 +169,10 @@ class Server(StoppableThread):
         if rpc.name == "_server" and rpc.method == "get_object_methods":
             if rpc.args[0] not in self.shared_objects:
                 self._safe_log(f"No such object: {rpc.args[0]}", logging.WARNING)
-                message = self._package_error(RemoteProcedureError.NO_SUCH_THING)
+                message = _package_error(RemoteProcedureError.NO_SUCH_THING)
                 self.router_socket.send_multipart([address, b"", message])
             else:
-                message = self._package_success_reply(
+                message = _package_success_reply(
                     self.shared_objects[rpc.args[0]].shared_methods
                 )
                 self.router_socket.send_multipart([address, b"", message])
@@ -177,7 +180,7 @@ class Server(StoppableThread):
 
         # Check if the RPC is asking for the server to terminate (useful in testing).
         if rpc.name == "_server" and rpc.method == "stop":
-            message = self._package_success_reply(None)
+            message = _package_success_reply(None)
             self.router_socket.send_multipart([address, b"", message])
             self.stop()
             return
@@ -188,7 +191,7 @@ class Server(StoppableThread):
                 self.worker_locks.pop(rpc.args[0])
                 self._safe_log(f"Released lock for {rpc.args[0]}", logging.DEBUG)
 
-            message = self._package_success_reply(None)
+            message = _package_success_reply(None)
             self.router_socket.send_multipart([address, b"", message])
             return
 
@@ -197,7 +200,7 @@ class Server(StoppableThread):
             self._safe_log(
                 f"Received RPC for unknown object: {rpc.name}", logging.WARNING
             )
-            message = self._package_error(RemoteProcedureError.NO_SUCH_THING)
+            message = _package_error(RemoteProcedureError.NO_SUCH_THING)
             self.router_socket.send_multipart([address, b"", message])
             return
 
@@ -209,7 +212,7 @@ class Server(StoppableThread):
                 f"Received RPC for unknown method: {rpc.name}.{rpc.method}",
                 logging.WARNING,
             )
-            message = self._package_error(RemoteProcedureError.NO_SUCH_METHOD)
+            message = _package_error(RemoteProcedureError.NO_SUCH_METHOD)
             self.router_socket.send_multipart([address, b"", message])
             return
 
@@ -219,7 +222,7 @@ class Server(StoppableThread):
                 f"Worker {rpc.name} is already locked by {str(self.worker_locks[rpc.name])}",
                 logging.WARNING,
             )
-            message = self._package_error(RemoteProcedureError.THING_IS_LOCKED)
+            message = _package_error(RemoteProcedureError.THING_IS_LOCKED)
             self.router_socket.send_multipart([address, b"", message])
             return
 
