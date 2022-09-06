@@ -28,10 +28,16 @@ class StoppableThread(Thread):
         self._task_cleanup()
 
     def _task_setup(self):
+        """Called once before entering the main loop.
+        Override this method to perform any setup required by the task."""
         pass
 
     def _task_cycle(self):
+        """Called repeatedly in the main loop.
+        Override this method to perform the task."""
         pass
 
     def _task_cleanup(self):
+        """Called once after exiting the main loop.
+        Override this method to perform any cleanup required by the task."""
         pass

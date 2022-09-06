@@ -8,11 +8,11 @@
 [![Codacy Code Quality](https://app.codacy.com/project/badge/Grade/524f9decd5824df29734e1c9573a4af5)](https://www.codacy.com/gh/matpompili/caniusethat/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=matpompili/caniusethat&amp;utm_campaign=Badge_Grade)
 [![Codacy Coverage](https://app.codacy.com/project/badge/Coverage/524f9decd5824df29734e1c9573a4af5)](https://www.codacy.com/gh/matpompili/caniusethat/dashboard?utm_source=github.com&utm_medium=referral&utm_content=matpompili/caniusethat&utm_campaign=Badge_Coverage)
 
-**caniusethat** is a wrapper around PyZMQ that enables easy RPC (remote procedure call) functionality
+*caniusethat* is a wrapper around PyZMQ that enables easy RPC (remote procedure call) functionality
 
 ## Get started
 
-caniusethat can be installed via `pip`:
+CanIUseThat can be installed via `pip`:
 
 ```bash
 pip install caniusethat
