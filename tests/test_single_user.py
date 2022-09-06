@@ -1,4 +1,3 @@
-import threading
 import time
 
 import pytest
@@ -16,17 +15,23 @@ SERVER_ADDRESS = "tcp://127.0.0.1:6555"
 
 
 class ClassWithoutLocks:
+    def __init__(self, secret_number: int) -> None:
+        self._secret_number = secret_number
+
     @you_can_use_this
     def add(self, a: int, b: int) -> int:
         """Add two numbers."""
-        return a + b
+        return a + b + self._secret_number
 
     @you_can_use_this
     def method_without_docs(self, a, b):
-        return a - b
+        return a - b - self._secret_number
 
 
 class ClassWithLocks:
+    def __init__(self, secret_number: int) -> None:
+        self._secret_number = secret_number
+
     @you_can_use_this
     @acquire_lock
     def initialize(self) -> None:
@@ -36,7 +41,7 @@ class ClassWithLocks:
     @you_can_use_this
     def add(self, a: int, b: int) -> int:
         """Add two numbers."""
-        return a + b
+        return a + b + self._secret_number
 
     @you_can_use_this
     @release_lock
@@ -59,7 +64,7 @@ def wait_for_context_cleanup():
 
 
 def test_local_server_shutdown():
-    my_obj = ClassWithoutLocks()
+    my_obj = ClassWithoutLocks(secret_number=42)
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -69,7 +74,7 @@ def test_local_server_shutdown():
 
 
 def test_remote_server_shutdown():
-    my_obj = ClassWithoutLocks()
+    my_obj = ClassWithoutLocks(secret_number=42)
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -79,8 +84,7 @@ def test_remote_server_shutdown():
 
 
 def test_shared_thing():
-
-    my_obj = ClassWithoutLocks()
+    my_obj = ClassWithoutLocks(secret_number=42)
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -90,8 +94,8 @@ def test_shared_thing():
     my_thing = Thing("my_obj", SERVER_ADDRESS)
     assert hasattr(my_thing, "add")
     assert not hasattr(my_thing, "multiply")
-    assert my_thing.add(1, 2) == 3
-    assert my_thing.add(10, 20) == 30
+    assert my_thing.add(1, 2) == 45
+    assert my_thing.add(10, 20) == 72
     assert my_thing.add.__doc__ == "(a: int, b: int) -> int\nAdd two numbers."
     with pytest.raises(RuntimeError, match="RemoteProcedureError.METHOD_EXCEPTION"):
         my_thing.add(1, 2, 3)
@@ -103,7 +107,8 @@ def test_shared_thing():
 
 
 def test_locked_shared_thing():
-    my_obj = ClassWithLocks()
+    my_obj = ClassWithLocks(secret_number=42)
+    my_obj = ClassWithLocks(secret_number=42)
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -115,7 +120,7 @@ def test_locked_shared_thing():
     assert hasattr(my_thing, "add")
     assert hasattr(my_thing, "finalize")
     my_thing.initialize()
-    assert my_thing.add(1, 2) == 3
+    assert my_thing.add(1, 2) == 45
     my_thing.finalize()
     my_thing.close_this_thing()
 

@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 
 class SharedMethodDescriptor(NamedTuple):
@@ -10,7 +10,7 @@ class SharedMethodDescriptor(NamedTuple):
 
 class SharedObjectDescriptor(NamedTuple):
     name: str
-    object: Any
+    obj: Any
     shared_methods: List[SharedMethodDescriptor]
     locking_methods: List[str]
     unlocking_methods: List[str]
