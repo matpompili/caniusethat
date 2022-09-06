@@ -8,9 +8,9 @@ from typing import Any, Callable, Dict, List
 import zmq
 from zmq.utils.win32 import allow_interrupt
 
+from caniusethat._logging import getLogger
 from caniusethat._thread import StoppableThread
-from caniusethat.logging import getLogger
-from caniusethat.types import (
+from caniusethat._types import (
     RemoteProcedureCall,
     RemoteProcedureError,
     RemoteProcedureResponse,

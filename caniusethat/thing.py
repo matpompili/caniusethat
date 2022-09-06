@@ -4,8 +4,8 @@ from typing import Any, Callable, List
 
 import zmq
 
-from caniusethat.logging import getLogger
-from caniusethat.types import (
+from caniusethat._logging import getLogger
+from caniusethat._types import (
     RemoteProcedureCall,
     RemoteProcedureError,
     RemoteProcedureResponse,
