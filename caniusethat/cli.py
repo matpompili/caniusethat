@@ -33,7 +33,7 @@ def list_objects_methods(args) -> None:
     except RuntimeError:
         _logger.exception(f"Could not find object {args.object_name}.")
     else:
-        print(f"Available methods:")
+        print("Available methods:")
         for method in method_list:
             print(f"- {args.object_name}.{method.name}{method.signature}")
             print(f"    {method.docstring}")
