@@ -219,6 +219,12 @@ class Server(StoppableThread):
                 self.router_socket.send_multipart([address, b"", message])
             return
 
+        # Check if the RPC is asking for the list of shared list.
+        if rpc.name == "_server" and rpc.method == "get_object_list":
+            message = _package_success_reply(list(self.shared_objects.keys()))
+            self.router_socket.send_multipart([address, b"", message])
+            return
+
         # Check if the RPC is asking for the server to terminate (useful in testing).
         if rpc.name == "_server" and rpc.method == "stop":
             message = _package_success_reply(None)
@@ -231,6 +237,18 @@ class Server(StoppableThread):
             if self.worker_locks.get(rpc.args[0]) == address:
                 self.worker_locks.pop(rpc.args[0])
                 self._safe_log(f"Released lock for {rpc.args[0]}", logging.DEBUG)
+
+            message = _package_success_reply(None)
+            self.router_socket.send_multipart([address, b"", message])
+            return
+
+        # Check if the RPC is asking for the server to release a lock forcefully.
+        if rpc.name == "_server" and rpc.method == "force_release_lock":
+            if rpc.args[0] in self.worker_locks:
+                self.worker_locks.pop(rpc.args[0])
+                self._safe_log(
+                    f"Forcefully released lock for {rpc.args[0]}", logging.WARNING
+                )
 
             message = _package_success_reply(None)
             self.router_socket.send_multipart([address, b"", message])
@@ -343,6 +361,14 @@ class Server(StoppableThread):
         Returns:
             A list of SharedMethodDescriptors."""
         return self.shared_objects[name].shared_methods
+
+    def get_object_list(self) -> List[str]:
+        """Returns a list of the names of the objects in the server.
+
+        Returns:
+            A list of strings.
+        """
+        return list(self.shared_objects.keys())
 
     def _process_new_object_queue(self):
         # First obtain a list of the names, we don't want to change the
