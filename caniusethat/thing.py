@@ -11,6 +11,7 @@ from caniusethat._types import (
     RemoteProcedureResponse,
     SharedMethodDescriptor,
 )
+from caniusethat._validate import _validate_rpc_response
 
 _logger = getLogger(__name__)
 
@@ -26,9 +27,10 @@ class Thing:
         >>> from caniusethat import thing
         >>> my_thing = thing.Thing("remote_calculator", "tcp://127.0.0.1:6555")
         >>> my_thing.add(2, 3)
-        5   
+        5
     """
-    RESERVED_NAMES = ["available_methods", "close_this_thing"]
+
+    _RESERVED_NAMES = ["available_methods", "close_this_thing"]
 
     def __init__(self, name: str, server_address: str) -> None:
         self.name = name
@@ -41,25 +43,48 @@ class Thing:
 
         self._closed = False
 
-    def _get_object_description_from_server(self) -> List[SharedMethodDescriptor]:
-        """Gets the description of the remote object from the server."""
+    @staticmethod
+    def _make_method_fn(name: str) -> Callable:
+        return lambda _self, *args, **kwargs: _self._call_remote_method(
+            name, *args, **kwargs
+        )
+
+    def _call_remote_server_method(self, method_name: str, *args, **kwargs) -> Any:
+        """A helper method that calls a remote server method with the given name and arguments."""
         rpc_pickle = pickle.dumps(
-            RemoteProcedureCall("_server", "get_object_methods", (self.name,))
+            RemoteProcedureCall("_server", method_name, args, kwargs)
         )
         self.request_socket.send(rpc_pickle)
-        result = pickle.loads(self.request_socket.recv())
-        if not isinstance(result, RemoteProcedureResponse):
-            raise RuntimeError(f"Received invalid RemoteProcedureResponse: {result}")
-        if result.error != RemoteProcedureError.NO_ERROR:
-            raise RuntimeError(f"Remote procedure error: {result}")
-        if not isinstance(result.result, list):
-            raise RuntimeError(f"Received invalid RemoteProcedureResponse: {result}")
-        return result.result
+        return _validate_rpc_response(self.request_socket.recv())
+
+    def _call_remote_method(self, method_name: str, *args, **kwargs) -> Any:
+        """A helper method that calls a remote method with the given name and arguments."""
+        rpc_pickle = pickle.dumps(
+            RemoteProcedureCall(self.name, method_name, args, kwargs)
+        )
+        self.request_socket.send(rpc_pickle)
+        return _validate_rpc_response(self.request_socket.recv())
+
+    def _get_object_description_from_server(self) -> List[SharedMethodDescriptor]:
+        """Gets the description of the remote object from the server."""
+        object_description = self._call_remote_server_method(
+            "get_object_methods", self.name
+        )
+        if not isinstance(object_description, list):
+            raise RuntimeError(
+                f"Received invalid RemoteProcedureResponse: {object_description}"
+            )
+        for method_descriptor in object_description:
+            if not isinstance(method_descriptor, SharedMethodDescriptor):
+                raise RuntimeError(
+                    f"Received invalid RemoteProcedureResponse: {object_description}"
+                )
+        return object_description
 
     def _populate_methods_from_description(self) -> None:
         """Populates the methods of this object from the description of the remote object."""
         for (name, signature, docstring) in self._methods:
-            if name in self.RESERVED_NAMES:
+            if name in self._RESERVED_NAMES:
                 raise RuntimeError(
                     f"Method name `{name}` is reserved for internal use, please change it in the remote class."
                 )
@@ -70,40 +95,17 @@ class Thing:
             method_fn.__doc__ = signature + "\n" + docstring
             setattr(self, name, types.MethodType(method_fn, self))
 
-    @staticmethod
-    def _make_method_fn(name: str) -> Callable:
-        return lambda _self, *args, **kwargs: _self._call_remote_method(
-            name, *args, **kwargs
-        )
-
-    def _call_remote_method(self, method_name: str, *args, **kwargs) -> Any:
-        
-        rpc_pickle = pickle.dumps(
-            RemoteProcedureCall(self.name, method_name, args, kwargs)
-        )
-        self.request_socket.send(rpc_pickle)
-        result = pickle.loads(self.request_socket.recv())
-        if not isinstance(result, RemoteProcedureResponse):
-            raise RuntimeError(f"Received invalid RemoteProcedureResponse: {result}")
-        if result.error != RemoteProcedureError.NO_ERROR:
-            raise RuntimeError(f"Remote procedure error: {result}")
-        return result.result
-
     def available_methods(self) -> List[SharedMethodDescriptor]:
+        """Returns a list of the available methods of this object."""
         return self._methods
 
     def close_this_thing(self) -> None:
+        """Closes the connection to the remote object and server, releasing
+        any locks if any are still held."""
         if not self._closed:
             _logger.info("Closing connection to 👀 CanIUseThat server")
-            rpc_pickle = pickle.dumps(
-                RemoteProcedureCall("_server", "release_lock_if_any", (self.name,))
-            )
-            self.request_socket.send(rpc_pickle)
-            result = pickle.loads(self.request_socket.recv())
-            if not isinstance(result, RemoteProcedureResponse):
-                raise RuntimeError(
-                    f"Received invalid RemoteProcedureResponse: {result}"
-                )
-            if result.error != RemoteProcedureError.NO_ERROR:
-                raise RuntimeError(f"Remote procedure error: {result}")
+            _ = self._call_remote_server_method("release_lock_if_any", self.name)
             self._closed = True
+            self.request_socket.close()
+        else:
+            RuntimeError("Connection to 👀 CanIUseThat server already closed.")
