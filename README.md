@@ -20,7 +20,7 @@ Only use `caniusethat` on your local machine, or behind a firewall that is confi
 
 ## Get started
 
-caniusethat can be installed via `pip`:
+`caniusethat` can be installed via `pip`:
 
 ```bash
 pip install caniusethat
