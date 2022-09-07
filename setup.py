@@ -40,8 +40,8 @@ setup(
     },
     project_urls=project_urls,
     entry_points={
-        'console_scripts': [
-            'caniusethat-cli = cli:run_cli',
+        "console_scripts": [
+            "caniusethat-cli = cli:run_cli",
         ]
-    }
+    },
 )
