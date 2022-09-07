@@ -116,24 +116,13 @@ Returns:
     The new value of the wallet."""
     )
     with pytest.raises(
-        RuntimeError,
-        match=re.escape(
-            "Remote procedure error: RemoteProcedureResponse(result=TypeError("
-            "'deposit() takes 2 positional arguments but 3 were given'), "
-            "error=<RemoteProcedureError.METHOD_EXCEPTION: 4>)"
-        ),
+        RuntimeError, match="takes 2 positional arguments but 3 were given"
     ):
         my_thing.deposit(9, 5)
 
     assert my_thing.withdraw(1) == 10
     assert my_thing.withdraw(10) == 0
-    with pytest.raises(
-        RuntimeError,
-        match=re.escape(
-            "RemoteProcedureResponse(result=RuntimeError('Insufficient funds'), "
-            "error=<RemoteProcedureError.METHOD_EXCEPTION: 4>)"
-        ),
-    ):
+    with pytest.raises(RuntimeError, match="Insufficient funds"):
         my_thing.withdraw(100)
     my_thing.close_this_thing()
 
