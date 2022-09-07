@@ -2,9 +2,13 @@
 
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
+[Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.3.1...main)
+
+## [v0.3.1](https://github.com/matpompili/caniusethat/tree/v0.3.1) (2022-09-07)
+
 -   Added a command line interface tool, `caniusethat-cli` useful for testing/debugging purposes.
 
-[Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.3.0...main)
+[Full v0.3.1 Changelog](https://github.com/matpompili/caniusethat/compare/v0.3.0...v0.3.1)
 
 ## [v0.3.0](https://github.com/matpompili/caniusethat/tree/v0.3.0) (2022-09-02)
 
