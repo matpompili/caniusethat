@@ -8,9 +8,9 @@ from typing import Any, Callable, Dict, List
 import zmq
 from zmq.utils.win32 import allow_interrupt
 
+from caniusethat._logging import getLogger
 from caniusethat._thread import StoppableThread
-from caniusethat.logging import getLogger
-from caniusethat.types import (
+from caniusethat._types import (
     RemoteProcedureCall,
     RemoteProcedureError,
     RemoteProcedureResponse,
@@ -33,35 +33,8 @@ def _is_unlocking_method(obj: Any) -> bool:
     return inspect.ismethod(obj) and hasattr(obj, "_release_lock")
 
 
-def dealer_address(name: str) -> str:
+def _dealer_address(name: str) -> str:
     return f"inproc://{name}_worker"
-
-
-def you_can_use_this(f: Callable) -> Callable:
-    @wraps(f)
-    def wrapper(*args, **kwds):
-        return f(*args, **kwds)
-
-    wrapper._you_can_use_this = True  # type: ignore
-    return wrapper
-
-
-def acquire_lock(f: Callable) -> Callable:
-    @wraps(f)
-    def wrapper(*args, **kwds):
-        return f(*args, **kwds)
-
-    wrapper._acquire_lock = True  # type: ignore
-    return wrapper
-
-
-def release_lock(f: Callable) -> Callable:
-    @wraps(f)
-    def wrapper(*args, **kwds):
-        return f(*args, **kwds)
-
-    wrapper._release_lock = True  # type: ignore
-    return wrapper
 
 
 def _force_remote_server_stop(server_address: str) -> Any:
@@ -88,7 +61,75 @@ def _package_success_reply(reply: Any) -> bytes:
     return _package_reply(reply, RemoteProcedureError.NO_ERROR)
 
 
+def you_can_use_this(f: Callable) -> Callable:
+    """A decorator that marks a method as a shared method.
+
+    Example:
+        >>> @you_can_use_this
+        ... def get_name(self) -> str:
+        ...     return self.name
+    """
+
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        return f(*args, **kwds)
+
+    wrapper._you_can_use_this = True  # type: ignore
+    return wrapper
+
+
+def acquire_lock(f: Callable) -> Callable:
+    """A decorator that acquires the lock of the object before calling the method.
+
+    Example:
+        >>> @acquire_lock
+        ... @you_can_use_this
+        ... def start_phone_call(self, phone_number: str) -> None:
+        ...     self._make_phone_call(phone_number)
+    """
+
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        return f(*args, **kwds)
+
+    wrapper._acquire_lock = True  # type: ignore
+    return wrapper
+
+
+def release_lock(f: Callable) -> Callable:
+    """A decorator that releases the lock of the object after calling the method.
+
+    Example:
+        >>> @release_lock
+        ... @you_can_use_this
+        ... def stop_phone_call(self) -> None:
+        ...     self._hang_up()
+    """
+
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        return f(*args, **kwds)
+
+    wrapper._release_lock = True  # type: ignore
+    return wrapper
+
+
 class Server(StoppableThread):
+    """The Server takes care of sharing the objects on the network,
+    handling the remote procedure calls from multiple users and their
+    locks.
+
+    Attributes:
+        router_address (str): The address that the server will listen on.
+
+    Example:
+        >>> server = Server("tcp://127.0.0.1:6555")
+        >>> server.start()
+        >>> server.add_object("mobile_phone_interface", mobile_phone_interface)
+    """
+
+    _LINGER_TIME = 1000  # milliseconds
+
     def __init__(self, router_address: str) -> None:
         super().__init__()
         self.router_address = router_address
@@ -119,11 +160,11 @@ class Server(StoppableThread):
     def _task_cleanup(self):
         self._safe_log("Closing 👀 CanIUseThat server connections.")
         self.poller.unregister(self.router_socket)
-        self.router_socket.close(linger=1000)
+        self.router_socket.close(linger=self._LINGER_TIME)
 
         for dealer_socket in self.dealers.values():
             self.poller.unregister(dealer_socket)
-            dealer_socket.close(linger=1000)
+            dealer_socket.close(linger=self._LINGER_TIME)
 
         for worker in self.workers.values():
             worker.stop()
@@ -247,6 +288,12 @@ class Server(StoppableThread):
             self.worker_locks.pop(rpc.name)
 
     def add_object(self, name: str, obj: Any):
+        """Add an object to the server.
+
+        Args:
+            name: A unique name that will be used to refer to the object.
+            obj: The object to add to the server.
+        """
         # Build the SharedObjectDescriptor
         shared_methods = []
         for method_name, method in inspect.getmembers(obj, _is_shared_method):
@@ -288,7 +335,13 @@ class Server(StoppableThread):
             self.shared_objects_queue[name] = descriptor
 
     def get_object_methods(self, name: str) -> List[SharedMethodDescriptor]:
-        """Returns a list of methods of the object with the given name."""
+        """Returns a list of methods of the object with the given name.
+
+        Args:
+            name: The name of the object to get the methods of.
+
+        Returns:
+            A list of SharedMethodDescriptors."""
         return self.shared_objects[name].shared_methods
 
     def _process_new_object_queue(self):
@@ -307,7 +360,7 @@ class Server(StoppableThread):
             self.shared_objects[name] = descriptor
 
             dealer_socket = self.context.socket(zmq.DEALER)
-            dealer_socket.bind(dealer_address(name))
+            dealer_socket.bind(_dealer_address(name))
             self.poller.register(dealer_socket, zmq.POLLIN)
             self.dealers[name] = dealer_socket
 
@@ -317,13 +370,15 @@ class Server(StoppableThread):
 
 
 class _ObjectWorker(StoppableThread):
+    _LINGER_TIME = 1000  # milliseconds
+
     def __init__(self, worker_name: str, shared_object: SharedObjectDescriptor) -> None:
         super().__init__()
         self.worker_name = worker_name
         self.shared_object = shared_object
 
     def reply_address(self) -> str:
-        return dealer_address(self.worker_name)
+        return _dealer_address(self.worker_name)
 
     def _task_setup(self):
         self.context = zmq.Context.instance()
@@ -334,7 +389,7 @@ class _ObjectWorker(StoppableThread):
         self.poller.register(self.reply_socket, zmq.POLLIN)
 
     def _task_cleanup(self):
-        self.reply_socket.close(linger=1000)
+        self.reply_socket.close(linger=self._LINGER_TIME)
 
     def _task_cycle(self):
 

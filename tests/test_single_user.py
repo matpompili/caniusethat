@@ -1,3 +1,4 @@
+import re
 import time
 
 import pytest
@@ -15,39 +16,47 @@ SERVER_ADDRESS = "tcp://127.0.0.1:6555"
 
 
 class ClassWithoutLocks:
-    def __init__(self, secret_number: int) -> None:
-        self._secret_number = secret_number
+    def __init__(self) -> None:
+        self._wallet_value: int = 0
 
     @you_can_use_this
-    def add(self, a: int, b: int) -> int:
-        """Add two numbers."""
-        return a + b + self._secret_number
+    def deposit(self, amount: int) -> int:
+        """Deposit some money into the wallet.
+
+        Args:
+            amount: The amount of money to deposit.
+
+        Returns:
+            The new value of the wallet.
+        """
+        self._wallet_value = self._wallet_value + amount
+        return self._wallet_value
 
     @you_can_use_this
-    def method_without_docs(self, a, b):
-        return a - b - self._secret_number
+    def withdraw(self, amount: int) -> int:
+        if self._wallet_value < amount:
+            raise RuntimeError("Insufficient funds")
+        self._wallet_value = self._wallet_value - amount
+        return self._wallet_value
 
 
 class ClassWithLocks:
-    def __init__(self, secret_number: int) -> None:
-        self._secret_number = secret_number
+    def __init__(self) -> None:
+        self._secret = ""
 
     @you_can_use_this
     @acquire_lock
-    def initialize(self) -> None:
-        """Initialize the class."""
-        pass
-
-    @you_can_use_this
-    def add(self, a: int, b: int) -> int:
-        """Add two numbers."""
-        return a + b + self._secret_number
+    def write_secret(self, secret: str) -> None:
+        """Write the secret to the class."""
+        self._secret = secret
 
     @you_can_use_this
     @release_lock
-    def finalize(self) -> None:
-        """Finalize the class."""
-        pass
+    def read_secret(self) -> str:
+        """Read the secret from the class."""
+        secret = self._secret
+        self._secret = ""
+        return secret
 
 
 class ClassWithReservedName:
@@ -64,7 +73,7 @@ def wait_for_context_cleanup():
 
 
 def test_local_server_shutdown():
-    my_obj = ClassWithoutLocks(secret_number=42)
+    my_obj = ClassWithoutLocks()
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -74,7 +83,7 @@ def test_local_server_shutdown():
 
 
 def test_remote_server_shutdown():
-    my_obj = ClassWithoutLocks(secret_number=42)
+    my_obj = ClassWithoutLocks()
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -84,7 +93,7 @@ def test_remote_server_shutdown():
 
 
 def test_shared_thing():
-    my_obj = ClassWithoutLocks(secret_number=42)
+    my_obj = ClassWithoutLocks()
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -92,13 +101,29 @@ def test_shared_thing():
     time.sleep(0.5)
 
     my_thing = Thing("my_obj", SERVER_ADDRESS)
-    assert hasattr(my_thing, "add")
-    assert not hasattr(my_thing, "multiply")
-    assert my_thing.add(1, 2) == 45
-    assert my_thing.add(10, 20) == 72
-    assert my_thing.add.__doc__ == "(a: int, b: int) -> int\nAdd two numbers."
-    with pytest.raises(RuntimeError, match="RemoteProcedureError.METHOD_EXCEPTION"):
-        my_thing.add(1, 2, 3)
+    assert hasattr(my_thing, "deposit")
+    assert not hasattr(my_thing, "free_cash")
+    assert my_thing.deposit(1) == 1
+    assert my_thing.deposit(10) == 11
+    assert my_thing.deposit.__doc__ == (
+        """(amount: int) -> int
+Deposit some money into the wallet.
+
+Args:
+    amount: The amount of money to deposit.
+
+Returns:
+    The new value of the wallet."""
+    )
+    with pytest.raises(
+        RuntimeError, match="takes 2 positional arguments but 3 were given"
+    ):
+        my_thing.deposit(9, 5)
+
+    assert my_thing.withdraw(1) == 10
+    assert my_thing.withdraw(10) == 0
+    with pytest.raises(RuntimeError, match="Insufficient funds"):
+        my_thing.withdraw(100)
     my_thing.close_this_thing()
 
     _force_remote_server_stop(SERVER_ADDRESS)
@@ -107,8 +132,7 @@ def test_shared_thing():
 
 
 def test_locked_shared_thing():
-    my_obj = ClassWithLocks(secret_number=42)
-    my_obj = ClassWithLocks(secret_number=42)
+    my_obj = ClassWithLocks()
 
     my_server = Server(SERVER_ADDRESS)
     my_server.start()
@@ -116,12 +140,10 @@ def test_locked_shared_thing():
     time.sleep(0.5)
 
     my_thing = Thing("my_obj", SERVER_ADDRESS)
-    assert hasattr(my_thing, "initialize")
-    assert hasattr(my_thing, "add")
-    assert hasattr(my_thing, "finalize")
-    my_thing.initialize()
-    assert my_thing.add(1, 2) == 45
-    my_thing.finalize()
+    assert hasattr(my_thing, "write_secret")
+    assert hasattr(my_thing, "read_secret")
+    my_thing.write_secret("This is a secret")
+    assert my_thing.read_secret() == "This is a secret"
     my_thing.close_this_thing()
 
     _force_remote_server_stop(SERVER_ADDRESS)
