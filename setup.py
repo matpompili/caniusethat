@@ -17,7 +17,7 @@ project_urls = {
 
 setup(
     name="caniusethat",
-    version="0.3.1",
+    version="0.3.2",
     packages=["caniusethat"],
     author="Matteo Pompili",
     python_requires=">=3.8",
@@ -41,7 +41,7 @@ setup(
     project_urls=project_urls,
     entry_points={
         "console_scripts": [
-            "caniusethat-cli = cli:run_cli",
+            "caniusethat-cli = caniusethat.cli:run_cli",
         ]
     },
 )
