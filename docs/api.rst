@@ -10,9 +10,9 @@ thing module
    :members:
    :undoc-members:
 
-server module
+shareable module
 ----------------
-.. automodule:: caniusethat.server
+.. automodule:: caniusethat.shareable
    :members:
    :undoc-members:
 
