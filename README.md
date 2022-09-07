@@ -14,7 +14,7 @@
 This module uses `pickle` to serialize and deserialize data. 
 From the [Python documentation](https://docs.python.org/3/library/pickle.html):
 > The `pickle` module is **not secure**. Only unpickle data you trust.
-It is possible to construct malicious pickle data which will execute arbitrary code during unpickling. Never unpickle data that could have come from an untrusted source, or that could have been tampered with.
+> It is possible to construct malicious pickle data which will execute arbitrary code during unpickling. Never unpickle data that could have come from an untrusted source, or that could have been tampered with.
 
 Only use `caniusethat` on your local machine, or behind a firewall that is configured to allow connections only within your local network, or in any case from machines you trust.
 
