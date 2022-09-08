@@ -69,7 +69,7 @@ class ClassWithReservedName:
 @pytest.fixture(autouse=True)
 def wait_for_context_cleanup():
     yield
-    time.sleep(0.1)
+    time.sleep(0.5)
 
 
 def test_local_server_shutdown():
