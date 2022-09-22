@@ -43,7 +43,7 @@ class Thing:
         name: The unique name of the remote object.
         server_address: The address of the server that is hosting the remote object.
         request_timeout: The timeout in seconds for requests to the server. If no
-            response is received within this time, an exception is raised. Defaults to 1 s.
+            response is received within this time, an exception is raised. Defaults to 60 s.
 
     Example:
         >>> from caniusethat import thing
@@ -53,15 +53,16 @@ class Thing:
     """
 
     _RESERVED_NAMES = ["available_methods", "close_this_thing"]
-    _LINGER_TIME = 1000
+    _LINGER_TIME = 1000  # ms
+    _MIN_REQUEST_TIMEOUT = 100  # ms
 
     def __init__(
-        self, name: str, server_address: str, request_timeout: float = 1.0
+        self, name: str, server_address: str, request_timeout: float = 60.0
     ) -> None:
         self.name = name
         self.request_timeout = request_timeout
 
-        _logger.info(f"Connecting to 👀 CanIUseThat server at {server_address}...")
+        _logger.info(f"Connecting to 👀 caniusethat server at {server_address}...")
         context = zmq.Context.instance()
         self.request_socket: zmq.Socket = context.socket(zmq.REQ)
         self.request_socket.connect(server_address)
@@ -82,14 +83,19 @@ class Thing:
         """Receives a message from the server.
         If no message is received within the timeout, an exception is raised."""
         with allow_interrupt(self.close_this_thing):
-            socks = dict(self.poller.poll(round(self.request_timeout * 1000)))
-            if (
-                self.request_socket in socks
-                and socks[self.request_socket] == zmq.POLLIN
-            ):
-                return self.request_socket.recv()
-            else:
-                raise TimeoutError("Timed out waiting for response from server.")
+            timeout = round(self.request_timeout * 1000)
+            timeout_per_attempt = min(round(timeout / 10), self._MIN_REQUEST_TIMEOUT)
+            while timeout > 0:
+                socks = dict(self.poller.poll(timeout_per_attempt))
+                timeout -= timeout_per_attempt
+                if (
+                    self.request_socket in socks
+                    and socks[self.request_socket] == zmq.POLLIN
+                ):
+                    return self.request_socket.recv()
+                else:
+                    _logger.warning("Waiting for response from server.")
+            raise TimeoutError("Timed out waiting for response from server.")
 
     def _make_rpc_and_validate_response(
         self, name: str, method: str, *args, **kwargs
@@ -136,7 +142,7 @@ class Thing:
         """Closes the connection to the remote object and server, releasing
         any locks if any are still held."""
         if not self._closed:
-            _logger.info("Closing connection to 👀 CanIUseThat server")
+            _logger.info("Closing connection to 👀 caniusethat server")
             _ = self._make_rpc_and_validate_response(
                 "_server", "release_lock_if_any", self.name
             )
@@ -144,4 +150,4 @@ class Thing:
             self.request_socket.close(linger=self._LINGER_TIME)
             self._closed = True
         else:
-            RuntimeError("Connection to 👀 CanIUseThat server already closed.")
+            RuntimeError("Connection to 👀 caniusethat server already closed.")

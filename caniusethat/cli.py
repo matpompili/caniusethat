@@ -14,7 +14,7 @@ _logger = getLogger("caniusethat.cli")
 def _send_receive(server_address: str, name: str, method: str, *args, **kwargs):
     ctx = zmq.Context.instance()
     socket: zmq.Socket = ctx.socket(zmq.REQ)
-    _logger.info(f"Connecting to 👀 CanIUseThat server at {server_address}...")
+    _logger.info(f"Connecting to 👀 caniusethat server at {server_address}...")
     socket.connect(server_address)
     poller = zmq.Poller()
     poller.register(socket, zmq.POLLIN)
