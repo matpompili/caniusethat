@@ -6,7 +6,7 @@ import zmq
 
 from caniusethat._logging import getLogger
 from caniusethat._types import RemoteProcedureCall, SharedMethodDescriptor
-from caniusethat.thing import _validate_rpc_response
+from caniusethat.rpc_utils import validate_rpc_response
 
 _logger = getLogger("caniusethat.cli")
 
@@ -25,7 +25,7 @@ def _send_receive(server_address: str, name: str, method: str, *args, **kwargs):
     socks = dict(poller.poll(timeout=1000))
     if socks.get(socket) == zmq.POLLIN:
         response = socket.recv()
-        return _validate_rpc_response(response)
+        return validate_rpc_response(response)
     else:
         raise TimeoutError("Server did not respond.")
 

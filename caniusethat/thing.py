@@ -1,39 +1,15 @@
-import pickle
 import types
+from threading import Condition
 from typing import Any, Callable, List
 
 import zmq
 from zmq.utils.win32 import allow_interrupt
 
 from caniusethat._logging import getLogger
-from caniusethat._types import (
-    RemoteProcedureCall,
-    RemoteProcedureError,
-    RemoteProcedureResponse,
-    SharedMethodDescriptor,
-)
+from caniusethat._types import SharedMethodDescriptor
+from caniusethat.rpc_utils import prepare_rpc_pickle, validate_rpc_response
 
 _logger = getLogger(__name__)
-
-
-def _validate_rpc_response(response: bytes) -> Any:
-    """Validates the response from the server.
-
-    Args:
-        response: The response from the server.
-
-    Returns:
-        The result of the RPC call, or raises an exception if the response is invalid.
-
-    Raises:
-        RuntimeError: If the response is invalid or if the response is an error."""
-    result = pickle.loads(response)
-    if not isinstance(result, RemoteProcedureResponse):
-        raise RuntimeError(f"Received invalid RemoteProcedureResponse: {result}")
-    if result.error != RemoteProcedureError.NO_ERROR:
-        raise RuntimeError(f"Remote procedure error: {result}")
-    else:
-        return result.result
 
 
 class Thing:
@@ -42,8 +18,6 @@ class Thing:
     Attributes:
         name: The unique name of the remote object.
         server_address: The address of the server that is hosting the remote object.
-        request_timeout: The timeout in seconds for requests to the server. If no
-            response is received within this time, an exception is raised. Defaults to 60 s.
 
     Example:
         >>> from caniusethat import thing
@@ -54,13 +28,10 @@ class Thing:
 
     _RESERVED_NAMES = ["available_methods", "close_this_thing"]
     _LINGER_TIME = 1000  # ms
-    _MIN_REQUEST_TIMEOUT = 100  # ms
 
-    def __init__(
-        self, name: str, server_address: str, request_timeout: float = 60.0
-    ) -> None:
+    def __init__(self, name: str, server_address: str) -> None:
         self.name = name
-        self.request_timeout = request_timeout
+        self._rpc_condition = Condition()
 
         _logger.info(f"Connecting to 👀 caniusethat server at {server_address}...")
         context = zmq.Context.instance()
@@ -80,29 +51,26 @@ class Thing:
         )
 
     def _socket_receive(self) -> bytes:
-        """Receives a message from the server.
-        If no message is received within the timeout, an exception is raised."""
+        """Receives a message from the server."""
         with allow_interrupt(self.close_this_thing):
-            timeout = round(self.request_timeout * 1000)
-            timeout_per_attempt = min(round(timeout / 10), self._MIN_REQUEST_TIMEOUT)
-            while timeout > 0:
-                socks = dict(self.poller.poll(timeout_per_attempt))
-                timeout -= timeout_per_attempt
-                if (
-                    self.request_socket in socks
-                    and socks[self.request_socket] == zmq.POLLIN
-                ):
-                    return self.request_socket.recv()
-                else:
-                    _logger.warning("Waiting for response from server.")
-            raise TimeoutError("Timed out waiting for response from server.")
+            socks = dict(self.poller.poll())
+            if not (
+                self.request_socket in socks
+                and socks[self.request_socket] == zmq.POLLIN
+            ):
+                raise RuntimeError(
+                    f"Poller returned incorrect socket or event: {socks}"
+                )
+            return self.request_socket.recv()
 
     def _make_rpc_and_validate_response(
         self, name: str, method: str, *args, **kwargs
     ) -> Any:
-        rpc_pickle = pickle.dumps(RemoteProcedureCall(name, method, args, kwargs))
-        self.request_socket.send(rpc_pickle)
-        return _validate_rpc_response(self._socket_receive())
+        rpc_pickle = prepare_rpc_pickle(name, method, args, kwargs)
+        with self._rpc_condition:
+            self.request_socket.send(rpc_pickle)
+            socket_response = self._socket_receive()
+        return validate_rpc_response(socket_response)
 
     def _get_object_description_from_server(self) -> List[SharedMethodDescriptor]:
         """Gets the description of the remote object from the server."""
@@ -143,9 +111,15 @@ class Thing:
         any locks if any are still held."""
         if not self._closed:
             _logger.info("Closing connection to 👀 caniusethat server")
-            _ = self._make_rpc_and_validate_response(
-                "_server", "release_lock_if_any", self.name
-            )
+            try:
+                _ = self._make_rpc_and_validate_response(
+                    "_server", "release_lock_if_any", self.name
+                )
+            except Exception:
+                _logger.exception(
+                    "There was an error when trying to remove locks on the Thing."
+                )
+
             self.poller.unregister(self.request_socket)
             self.request_socket.close(linger=self._LINGER_TIME)
             self._closed = True
