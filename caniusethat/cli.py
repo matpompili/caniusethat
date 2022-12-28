@@ -1,34 +1,46 @@
 import argparse
+import pickle
 from typing import List
 
 import zmq
 
 from caniusethat._logging import getLogger
-from caniusethat._types import SharedMethodDescriptor
-from caniusethat.thing import _make_rpc_and_validate_response
+from caniusethat._types import RemoteProcedureCall, SharedMethodDescriptor
+from caniusethat.rpc_utils import validate_rpc_response
 
 _logger = getLogger("caniusethat.cli")
 
 
-def list_server_objects(args) -> None:
+def _send_receive(server_address: str, name: str, method: str, *args, **kwargs):
     ctx = zmq.Context.instance()
     socket: zmq.Socket = ctx.socket(zmq.REQ)
-    _logger.info(f"Connecting to 👀 CanIUseThat server at {args.server_address}...")
-    socket.connect(args.server_address)
-    object_list = _make_rpc_and_validate_response(socket, "_server", "get_object_list")
+    _logger.info(f"Connecting to 👀 caniusethat server at {server_address}...")
+    socket.connect(server_address)
+    poller = zmq.Poller()
+    poller.register(socket, zmq.POLLIN)
+
+    rpc_pickle = pickle.dumps(RemoteProcedureCall(name, method, args, kwargs))
+    socket.send(rpc_pickle)
+
+    socks = dict(poller.poll(timeout=1000))
+    if socks.get(socket) == zmq.POLLIN:
+        response = socket.recv()
+        return validate_rpc_response(response)
+    else:
+        raise TimeoutError("Server did not respond.")
+
+
+def list_server_objects(args) -> None:
+    object_list = _send_receive(args.server_address, "_server", "get_object_list")
     print("Available objects:")
     for obj_name in object_list:
         print(f"- {obj_name}")
 
 
 def list_objects_methods(args) -> None:
-    ctx = zmq.Context.instance()
-    socket: zmq.Socket = ctx.socket(zmq.REQ)
-    _logger.info(f"Connecting to 👀 CanIUseThat server at {args.server_address}...")
-    socket.connect(args.server_address)
     try:
-        method_list: List[SharedMethodDescriptor] = _make_rpc_and_validate_response(
-            socket, "_server", "get_object_methods", args.object_name
+        method_list: List[SharedMethodDescriptor] = _send_receive(
+            args.server_address, "_server", "get_object_methods", args.object_name
         )
     except RuntimeError:
         _logger.exception(f"Could not find object {args.object_name}.")
@@ -40,13 +52,9 @@ def list_objects_methods(args) -> None:
 
 
 def unlock(args) -> None:
-    ctx = zmq.Context.instance()
-    socket: zmq.Socket = ctx.socket(zmq.REQ)
-    _logger.info(f"Connecting to 👀 CanIUseThat server at {args.server_address}...")
-    socket.connect(args.server_address)
     try:
-        _make_rpc_and_validate_response(
-            socket, "_server", "force_release_lock", args.object_name
+        _send_receive(
+            args.server_address, "_server", "force_release_lock", args.object_name
         )
     except RuntimeError:
         _logger.exception(f"Could not release lock for object {args.object_name}")

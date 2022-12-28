@@ -1,46 +1,15 @@
-import pickle
 import types
+from threading import Condition
 from typing import Any, Callable, List
 
 import zmq
+from zmq.utils.win32 import allow_interrupt
 
 from caniusethat._logging import getLogger
-from caniusethat._types import (
-    RemoteProcedureCall,
-    RemoteProcedureError,
-    RemoteProcedureResponse,
-    SharedMethodDescriptor,
-)
+from caniusethat._types import SharedMethodDescriptor
+from caniusethat.rpc_utils import prepare_rpc_pickle, validate_rpc_response
 
 _logger = getLogger(__name__)
-
-
-def _validate_rpc_response(response: bytes) -> Any:
-    """Validates the response from the server.
-
-    Args:
-        response: The response from the server.
-
-    Returns:
-        The result of the RPC call, or raises an exception if the response is invalid.
-
-    Raises:
-        RuntimeError: If the response is invalid or if the response is an error."""
-    result = pickle.loads(response)
-    if not isinstance(result, RemoteProcedureResponse):
-        raise RuntimeError(f"Received invalid RemoteProcedureResponse: {result}")
-    if result.error != RemoteProcedureError.NO_ERROR:
-        raise RuntimeError(f"Remote procedure error: {result}")
-    else:
-        return result.result
-
-
-def _make_rpc_and_validate_response(
-    socket: zmq.Socket, name: str, method: str, *args, **kwargs
-) -> Any:
-    rpc_pickle = pickle.dumps(RemoteProcedureCall(name, method, args, kwargs))
-    socket.send(rpc_pickle)
-    return _validate_rpc_response(socket.recv())
 
 
 class Thing:
@@ -58,44 +27,55 @@ class Thing:
     """
 
     _RESERVED_NAMES = ["available_methods", "close_this_thing"]
+    _LINGER_TIME = 1000  # ms
 
     def __init__(self, name: str, server_address: str) -> None:
         self.name = name
+        self._rpc_condition = Condition()
+
+        _logger.info(f"Connecting to 👀 caniusethat server at {server_address}...")
         context = zmq.Context.instance()
         self.request_socket: zmq.Socket = context.socket(zmq.REQ)
         self.request_socket.connect(server_address)
-        _logger.info(f"Connecting to 👀 CanIUseThat server at {server_address}")
+        self.poller = zmq.Poller()
+        self.poller.register(self.request_socket, zmq.POLLIN)
+
         self._methods = self._get_object_description_from_server()
         self._populate_methods_from_description()
 
         self._closed = False
 
-    @staticmethod
-    def _make_method_fn(name: str) -> Callable:
-        return lambda _self, *args, **kwargs: _make_rpc_and_validate_response(
-            _self.request_socket, _self.name, name, *args, **kwargs
+    def _make_method_fn(self, name: str) -> Callable:
+        return lambda _self, *args, **kwargs: self._make_rpc_and_validate_response(
+            _self.name, name, *args, **kwargs
         )
 
-    # def _call_remote_server_method(self, method_name: str, *args, **kwargs) -> Any:
-    #     """A helper method that calls a remote server method with the given name and arguments."""
-    #     rpc_pickle = pickle.dumps(
-    #         RemoteProcedureCall("_server", method_name, args, kwargs)
-    #     )
-    #     self.request_socket.send(rpc_pickle)
-    #     return _validate_rpc_response(self.request_socket.recv())
+    def _socket_receive(self) -> bytes:
+        """Receives a message from the server."""
+        with allow_interrupt(self.close_this_thing):
+            socks = dict(self.poller.poll())
+            if not (
+                self.request_socket in socks
+                and socks[self.request_socket] == zmq.POLLIN
+            ):
+                raise RuntimeError(
+                    f"Poller returned incorrect socket or event: {socks}"
+                )
+            return self.request_socket.recv()
 
-    # def _call_remote_method(self, method_name: str, *args, **kwargs) -> Any:
-    #     """A helper method that calls a remote method with the given name and arguments."""
-    #     rpc_pickle = pickle.dumps(
-    #         RemoteProcedureCall(self.name, method_name, args, kwargs)
-    #     )
-    #     self.request_socket.send(rpc_pickle)
-    #     return _validate_rpc_response(self.request_socket.recv())
+    def _make_rpc_and_validate_response(
+        self, name: str, method: str, *args, **kwargs
+    ) -> Any:
+        rpc_pickle = prepare_rpc_pickle(name, method, args, kwargs)
+        with self._rpc_condition:
+            self.request_socket.send(rpc_pickle)
+            socket_response = self._socket_receive()
+        return validate_rpc_response(socket_response)
 
     def _get_object_description_from_server(self) -> List[SharedMethodDescriptor]:
         """Gets the description of the remote object from the server."""
-        object_description = _make_rpc_and_validate_response(
-            self.request_socket, "_server", "get_object_methods", self.name
+        object_description = self._make_rpc_and_validate_response(
+            "_server", "get_object_methods", self.name
         )
         if not isinstance(object_description, list):
             raise RuntimeError(
@@ -130,11 +110,18 @@ class Thing:
         """Closes the connection to the remote object and server, releasing
         any locks if any are still held."""
         if not self._closed:
-            _logger.info("Closing connection to 👀 CanIUseThat server")
-            _ = _make_rpc_and_validate_response(
-                self.request_socket, "_server", "release_lock_if_any", self.name
-            )
+            _logger.info("Closing connection to 👀 caniusethat server")
+            try:
+                _ = self._make_rpc_and_validate_response(
+                    "_server", "release_lock_if_any", self.name
+                )
+            except Exception:
+                _logger.exception(
+                    "There was an error when trying to remove locks on the Thing."
+                )
+
+            self.poller.unregister(self.request_socket)
+            self.request_socket.close(linger=self._LINGER_TIME)
             self._closed = True
-            self.request_socket.close()
         else:
-            RuntimeError("Connection to 👀 CanIUseThat server already closed.")
+            RuntimeError("Connection to 👀 caniusethat server already closed.")

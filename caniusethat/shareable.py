@@ -148,7 +148,7 @@ class Server(StoppableThread):
 
     def _task_setup(self):
         self._safe_log(
-            f"Starting 👀 CanIUseThat server, listening on {self.router_address}."
+            f"Starting 👀 caniusethat server, listening on {self.router_address}."
         )
         self.context = zmq.Context.instance()
         self.router_socket = self.context.socket(zmq.ROUTER)
@@ -158,7 +158,7 @@ class Server(StoppableThread):
         self.poller.register(self.router_socket, zmq.POLLIN)
 
     def _task_cleanup(self):
-        self._safe_log("Closing 👀 CanIUseThat server connections.")
+        self._safe_log("Closing 👀 caniusethat server connections.")
         self.poller.unregister(self.router_socket)
         self.router_socket.close(linger=self._LINGER_TIME)
 
