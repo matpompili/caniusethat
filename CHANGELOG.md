@@ -2,11 +2,15 @@
 
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
+[Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.4.0...main)
+
+## [v0.4.0](https://github.com/matpompili/caniusethat/tree/v0.4.0) (2022-12-28)
+
 -   Bump `pyzmq` from 23.2.1 to 24.0.1.
 -   Now Windows can interrupt remote procedure calls with `Ctrl+C`. (PR #19)
 -   Remote procedure calls are now thread-safe. (PR #19)
 
-[Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.3.2...main)
+[Full v0.4.0 Changelog](https://github.com/matpompili/caniusethat/compare/v0.3.2...v0.4.0)
 
 ## [v0.3.2](https://github.com/matpompili/caniusethat/tree/v0.3.2) (2022-09-07)
 
