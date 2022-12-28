@@ -2,6 +2,7 @@
 
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
+-   Bump `pyzmq` from 23.2.1 to 24.0.1.
 -   Now Windows can interrupt remote procedure calls with `Ctrl+C`. (PR #19)
 -   Remote procedure calls are now thread-safe. (PR #19)
 
