@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pyzmq = "~=23.2"
+pyzmq = "~=24.0"
 
 [dev-packages]
 mypy = "~=0.971"
