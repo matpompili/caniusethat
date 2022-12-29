@@ -2,6 +2,8 @@
 
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
+-   Reduce strictness of `pyzmq` requirement. 
+
 [Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.4.0...main)
 
 ## [v0.4.0](https://github.com/matpompili/caniusethat/tree/v0.4.0) (2022-12-28)
