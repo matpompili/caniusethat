@@ -16,7 +16,7 @@ Sphinx = "~=5.1"
 sphinx-rtd-theme = "~=1.0"
 myst-parser = "~=0.18"
 bump2version = "~=1.0"
-coverage = "~=6.4"
+coverage = "~=7.0"
 ipython = "*"
 
 [requires]
