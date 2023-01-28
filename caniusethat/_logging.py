@@ -5,6 +5,10 @@ import sys
 def getLogger(name: str, log_level=logging.INFO) -> logging.Logger:
     """Returns a logger with a default format."""
 
+    logger = logging.getLogger(name)
+
+    logger.handlers.clear()  # Remove any existing handlers
+
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setLevel(log_level)
     handler.setFormatter(
@@ -14,7 +18,6 @@ def getLogger(name: str, log_level=logging.INFO) -> logging.Logger:
         )
     )
 
-    logger = logging.getLogger(name)
     logger.addHandler(handler)
     logger.setLevel(log_level)
 
