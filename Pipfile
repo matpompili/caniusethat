@@ -9,7 +9,7 @@ pyzmq = ">=23.2"
 [dev-packages]
 mypy = "~=0.971"
 black = ">=22.6"
-isort = "~=5.10"
+isort = "~=5.12"
 build = "~=0.8"
 pytest = "~=7.1"
 Sphinx = "~=5.1"
