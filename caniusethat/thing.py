@@ -90,7 +90,7 @@ class Thing:
 
     def _populate_methods_from_description(self) -> None:
         """Populates the methods of this object from the description of the remote object."""
-        for (name, signature, docstring) in self._methods:
+        for name, signature, docstring in self._methods:
             if name in self._RESERVED_NAMES:
                 raise RuntimeError(
                     f"Method name `{name}` is reserved for internal use, please change it in the remote class."

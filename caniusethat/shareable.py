@@ -418,7 +418,6 @@ class _ObjectWorker(StoppableThread):
         self.reply_socket.close(linger=self._LINGER_TIME)
 
     def _task_cycle(self):
-
         with allow_interrupt(self.stop):
             # Wait for a request
             poll_sockets = dict(self.poller.poll(timeout=10))
