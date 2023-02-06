@@ -2,6 +2,9 @@
 
 ## [Unreleased](https://github.com/matpompili/caniusethat/tree/main)
 
+-   Update `black` to make tests pass.
+-   Update dependabot settings to only check for `pyzmq` updates.
+
 [Full Unreleased Changelog](https://github.com/matpompili/caniusethat/compare/v0.4.1...main)
 
 ## [v0.4.1](https://github.com/matpompili/caniusethat/tree/v0.4.1) (2022-12-29)
